@@ -1,0 +1,23 @@
+# Render Blueprint — RavFia Pet Services (Devpost PayPal AI Hackathon)
+# Deploy: in Render, New > Blueprint, point it at the public GitHub repo.
+# Then set the env vars below in the dashboard (sandbox values only).
+services:
+  - type: web
+    name: ravfia-pet-book
+    runtime: node
+    plan: free
+    buildCommand: npm install && npm run build
+    startCommand: npm run start
+    envVars:
+      - key: PAYPAL_ENV
+        value: sandbox
+      - key: PAYPAL_CLIENT_ID
+        sync: false
+      - key: PAYPAL_CLIENT_SECRET
+        sync: false
+      - key: NEXT_PUBLIC_PAYPAL_CLIENT_ID
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: OPENAI_MODEL
+        value: gpt-4o-mini
