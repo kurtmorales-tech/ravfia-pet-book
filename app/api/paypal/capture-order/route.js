@@ -1,7 +1,15 @@
 import { NextResponse } from 'next/server';
-import { capturePaypalOrder } from '../../../../lib/paypal';
+import {
+  capturePaypalOrder,
+  isSameOriginRequest,
+  verifyCaptureToken,
+} from '../../../../lib/paypal';
 
 export async function POST(request) {
+  if (!isSameOriginRequest(request)) {
+    return NextResponse.json({ error: 'Request must come from this site.' }, { status: 403 });
+  }
+
   let body;
   try {
     body = await request.json();
@@ -13,6 +21,9 @@ export async function POST(request) {
   if (!orderId) {
     return NextResponse.json({ error: 'orderId is required.' }, { status: 400 });
   }
+  if (!verifyCaptureToken(orderId, body?.captureToken)) {
+    return NextResponse.json({ error: 'Invalid or expired capture authorization.' }, { status: 403 });
+  }
 
   try {
     const capture = await capturePaypalOrder(orderId);
@@ -21,7 +32,6 @@ export async function POST(request) {
     return NextResponse.json({
       id: capture.id,
       status: capture.status,
-      payerEmail: capture.payer?.email_address || null,
       amountPaid: cap?.amount?.value || null,
       currency: cap?.amount?.currency_code || 'USD',
     });
