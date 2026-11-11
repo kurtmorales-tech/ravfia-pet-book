@@ -1,6 +1,7 @@
 'use client';
 
 import { PayPalScriptProvider, PayPalButtons } from '@paypal/react-paypal-js';
+import { useRef } from 'react';
 
 // PayPal SANDBOX checkout for the booking deposit. Buttons come from the
 // PayPal JS SDK; order create/capture run through our own API routes so the
@@ -8,6 +9,7 @@ import { PayPalScriptProvider, PayPalButtons } from '@paypal/react-paypal-js';
 // on the server from the service picked.
 export default function PayPalCheckout({ booking, onPaid, onError }) {
   const clientId = process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID;
+  const captureToken = useRef(null);
 
   if (!clientId) {
     return (
@@ -36,13 +38,18 @@ export default function PayPalCheckout({ booking, onPaid, onError }) {
           });
           const data = await res.json();
           if (!res.ok) throw new Error(data.error || 'Could not create the PayPal order.');
+          captureToken.current = data.captureToken;
           return data.id;
         }}
         onApprove={async (data) => {
+          if (!captureToken.current) {
+            onError('Could not verify this PayPal order. Please try again.');
+            return;
+          }
           const res = await fetch('/api/paypal/capture-order', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ orderId: data.orderID }),
+            body: JSON.stringify({ orderId: data.orderID, captureToken: captureToken.current }),
           });
           const result = await res.json();
           if (!res.ok) {
