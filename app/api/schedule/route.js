@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { parseBookingRequest, assistantReply } from '../../../lib/assistant';
 import { SERVICES, TIME_WINDOWS } from '../../../lib/services';
+import { isRateLimited, readJsonBody } from '../../../lib/request-controls';
 
 // Scheduling assistant endpoint.
 // If OPENAI_API_KEY is set, an LLM (OpenAI-compatible chat API) tries the
@@ -63,16 +64,25 @@ async function tryLLM(message) {
 }
 
 export async function POST(request) {
-  let body;
-  try {
-    body = await request.json();
-  } catch {
+  if (isRateLimited(request, 'schedule', 10)) {
+    return NextResponse.json({ error: 'Too many requests. Please try again later.' }, { status: 429 });
+  }
+
+  const result = await readJsonBody(request, 4096);
+  if (result.error === 'too_large') {
+    return NextResponse.json({ error: 'Request body is too large.' }, { status: 413 });
+  }
+  if (result.error) {
     return NextResponse.json({ error: 'Request body must be JSON.' }, { status: 400 });
   }
 
+  const body = result.body;
   const message = String(body?.message || '').trim();
   if (!message) {
     return NextResponse.json({ error: 'Tell me what you need — for example, “watch my dog next Friday evening.”' }, { status: 400 });
+  }
+  if (message.length > 1000) {
+    return NextResponse.json({ error: 'Message is too long.' }, { status: 400 });
   }
 
   const llmFields = await tryLLM(message);
