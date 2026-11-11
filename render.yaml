@@ -17,6 +17,8 @@ services:
         sync: false
       - key: NEXT_PUBLIC_PAYPAL_CLIENT_ID
         sync: false
+      - key: PAYMENT_TOKEN_SECRET
+        generateValue: true
       - key: OPENAI_API_KEY
         sync: false
       - key: OPENAI_MODEL

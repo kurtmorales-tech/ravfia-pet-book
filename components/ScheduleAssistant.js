@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { todayISO } from '../lib/services';
 
 // Chat panel: the customer describes what they need in plain English and
 // the assistant pre-fills the booking form.
@@ -25,7 +26,7 @@ export default function ScheduleAssistant({ onFill }) {
       const res = await fetch('/api/schedule', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: text }),
+        body: JSON.stringify({ message: text, today: todayISO() }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Something went wrong.');
@@ -36,7 +37,10 @@ export default function ScheduleAssistant({ onFill }) {
     } catch (err) {
       setMessages((m) => [
         ...m,
-        { role: 'assistant', text: `Sorry — ${err.message} You can also fill in the form directly below.` },
+        {
+          role: 'assistant',
+          text: `Sorry — ${err.message} You can also fill in the form directly below.`,
+        },
       ]);
     } finally {
       setBusy(false);
@@ -45,20 +49,27 @@ export default function ScheduleAssistant({ onFill }) {
 
   return (
     <div className="chat">
-      <div className="chat-log">
+      <div className="chat-log" role="log" aria-live="polite" aria-relevant="additions">
         {messages.map((m, i) => (
           <div key={i} className={`chat-msg ${m.role}`}>
             {m.text}
           </div>
         ))}
-        {busy && <div className="chat-msg assistant">One moment…</div>}
+        {busy && (
+          <div className="chat-msg assistant" role="status">
+            One moment…
+          </div>
+        )}
       </div>
-      <form className="chat-form" onSubmit={send}>
+      <form className="chat-form" onSubmit={send} aria-label="Scheduling assistant">
         <input
           value={input}
           onChange={(e) => setInput(e.target.value)}
           placeholder="e.g. Book a walk for my dog Milo tomorrow afternoon"
           aria-label="Describe the booking you need"
+          maxLength={1000}
+          autoComplete="off"
+          enterKeyHint="send"
         />
         <button className="primary" type="submit" disabled={busy}>
           Ask

@@ -1,12 +1,12 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import ServicesList from '../components/ServicesList';
 import ScheduleAssistant from '../components/ScheduleAssistant';
 import BookingForm from '../components/BookingForm';
 import PayPalCheckout from '../components/PayPalCheckout';
 import Confirmation from '../components/Confirmation';
-import { getService, depositFor, money } from '../lib/services';
+import { getService, depositFor, money, todayISO } from '../lib/services';
 
 const EMPTY_BOOKING = {
   serviceId: '',
@@ -24,9 +24,24 @@ export default function Home() {
   const [step, setStep] = useState('book'); // book -> pay -> done
   const [payment, setPayment] = useState(null);
   const [error, setError] = useState('');
+  const [today, setToday] = useState('');
+  const errorRef = useRef(null);
+  const payHeadingRef = useRef(null);
 
   const service = getService(booking.serviceId);
   const deposit = depositFor(service);
+
+  useEffect(() => {
+    setToday(todayISO());
+  }, []);
+
+  useEffect(() => {
+    if (error) errorRef.current?.focus();
+  }, [error]);
+
+  useEffect(() => {
+    if (step === 'pay') payHeadingRef.current?.focus();
+  }, [step]);
 
   function fillFromAssistant(fields) {
     setBooking((b) => ({ ...b, ...fields }));
@@ -36,6 +51,7 @@ export default function Home() {
     return (
       booking.serviceId &&
       booking.date &&
+      booking.date >= todayISO() &&
       booking.timeWindow &&
       booking.customerName.trim() &&
       /.+@.+\..+/.test(booking.email)
@@ -44,12 +60,24 @@ export default function Home() {
 
   function goToPay(e) {
     e.preventDefault();
+    if (booking.date && booking.date < todayISO()) {
+      setError('Pick a date in the future.');
+      return;
+    }
     if (!readyToPay()) {
       setError('Fill in the service, date, time window, your name, and a valid email first.');
       return;
     }
     setError('');
     setStep('pay');
+    window.scrollTo({ top: 0 });
+  }
+
+  function startOver() {
+    setBooking(EMPTY_BOOKING);
+    setPayment(null);
+    setError('');
+    setStep('book');
     window.scrollTo({ top: 0 });
   }
 
@@ -62,19 +90,15 @@ export default function Home() {
         <p>Book pet care in plain English. A small deposit locks in your spot — no more no-shows.</p>
       </header>
 
-      {error && <div className="error">{error}</div>}
+      {error && (
+        <div className="error" id="form-error" role="alert" tabIndex={-1} ref={errorRef}>
+          {error}
+        </div>
+      )}
 
       {step === 'done' && payment ? (
         <section className="panel">
-          <Confirmation
-            booking={booking}
-            payment={payment}
-            onStartOver={() => {
-              setBooking(EMPTY_BOOKING);
-              setPayment(null);
-              setStep('book');
-            }}
-          />
+          <Confirmation booking={booking} payment={payment} onStartOver={startOver} />
         </section>
       ) : (
         <>
@@ -94,8 +118,9 @@ export default function Home() {
 
           <section className="panel">
             <h2>3. Booking details</h2>
+            <p className="fineprint">Fields marked * are required.</p>
             <form onSubmit={goToPay}>
-              <BookingForm booking={booking} onChange={setBooking} />
+              <BookingForm booking={booking} onChange={setBooking} minDate={today || undefined} />
               {step === 'book' && (
                 <div className="actions">
                   <button className="primary" type="submit" disabled={!service}>
@@ -116,7 +141,9 @@ export default function Home() {
 
           {step === 'pay' && service && (
             <section className="panel">
-              <h2>4. Pay the deposit</h2>
+              <h2 tabIndex={-1} ref={payHeadingRef}>
+                4. Pay the deposit
+              </h2>
               <div className="deposit-box">
                 Deposit due today: <strong>{money(deposit)}</strong>
                 <br />
@@ -127,12 +154,13 @@ export default function Home() {
                 booking={booking}
                 onPaid={(result) => {
                   setPayment(result);
+                  setError('');
                   setStep('done');
                   window.scrollTo({ top: 0 });
                 }}
                 onError={(msg) => setError(msg)}
               />
-              <button className="ghost" onClick={() => setStep('book')}>
+              <button className="ghost" type="button" onClick={() => setStep('book')}>
                 Back to booking details
               </button>
             </section>
