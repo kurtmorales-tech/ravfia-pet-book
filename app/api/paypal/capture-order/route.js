@@ -1,17 +1,24 @@
 import { NextResponse } from 'next/server';
-import { capturePaypalOrder } from '../../../../lib/paypal';
+import { capturePaypalOrder, isValidPaypalOrderId } from '../../../../lib/paypal';
+import { isRateLimited, readJsonBody } from '../../../../lib/request-controls';
 
 export async function POST(request) {
-  let body;
-  try {
-    body = await request.json();
-  } catch {
+  if (isRateLimited(request, 'paypal-capture-order', 10)) {
+    return NextResponse.json({ error: 'Too many requests. Please try again later.' }, { status: 429 });
+  }
+
+  const result = await readJsonBody(request, 256);
+  if (result.error === 'too_large') {
+    return NextResponse.json({ error: 'Request body is too large.' }, { status: 413 });
+  }
+  if (result.error) {
     return NextResponse.json({ error: 'Request body must be JSON.' }, { status: 400 });
   }
 
+  const body = result.body;
   const orderId = body?.orderId;
-  if (!orderId) {
-    return NextResponse.json({ error: 'orderId is required.' }, { status: 400 });
+  if (!isValidPaypalOrderId(orderId)) {
+    return NextResponse.json({ error: 'A valid orderId is required.' }, { status: 400 });
   }
 
   try {
@@ -25,7 +32,7 @@ export async function POST(request) {
       amountPaid: cap?.amount?.value || null,
       currency: cap?.amount?.currency_code || 'USD',
     });
-  } catch (err) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
+  } catch {
+    return NextResponse.json({ error: 'Payment provider is temporarily unavailable.' }, { status: 500 });
   }
 }
